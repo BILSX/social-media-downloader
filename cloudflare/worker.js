@@ -38,7 +38,7 @@ import { reportServerFailure } from '../src/lib/serverAnalytics'
  */
 
 /**
- * The one path the workers.dev hostname is allowed to serve.
+ * The small set of paths the workers.dev hostname is allowed to serve.
  *
  * Cloudflare's Bot Fight Mode is a *zone* feature, so it challenges Creem's
  * webhook POSTs to the custom domain — they arrive from an AWS address with an
@@ -50,14 +50,17 @@ import { reportServerFailure } from '../src/lib/serverAnalytics'
  * The workers.dev hostname is not in that zone, so it is not challenged. Creem
  * points at it instead. That is the whole reason it is load-bearing.
  *
- * But an origin that skips the zone's bot protection must not also be a second
- * front door to everything else: `/api/download` would be reachable with no
- * protection at all, and the entire static site would be served from a second
- * hostname as duplicate content. So this host serves the one endpoint that
- * verifies an HMAC over its own body before it trusts a single byte, and sends
- * everything else to the canonical origin.
+ * The workers.dev hostname must not become a second front door to the whole
+ * site. Keep it limited to the signed webhook plus the health and download API
+ * routes needed for direct Worker operation/testing; redirect all other paths
+ * to the canonical origin.
  */
 const WEBHOOK_PATH = '/api/billing/webhook'
+const WORKERS_DEV_ALLOWED_PATHS = new Set([
+  WEBHOOK_PATH,
+  '/api/health',
+  '/api/download',
+])
 const CANONICAL_ORIGIN = 'https://www.socialdownloader.space'
 
 function isWorkersDev(hostname) {
@@ -93,10 +96,9 @@ const worker = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
 
-    // Checked before routing, so nothing else on this hostname is ever
-    // dispatched — see WEBHOOK_PATH. 301 rather than 404 so a crawler that has
-    // already found the workers.dev copy is told where the real page lives.
-    if (isWorkersDev(url.hostname) && url.pathname !== WEBHOOK_PATH) {
+    // Keep workers.dev limited to explicitly allowed API routes. Other paths
+    // redirect to the canonical origin to avoid serving a duplicate site.
+    if (isWorkersDev(url.hostname) && !WORKERS_DEV_ALLOWED_PATHS.has(url.pathname)) {
       return Response.redirect(`${CANONICAL_ORIGIN}${url.pathname}${url.search}`, 301)
     }
 
