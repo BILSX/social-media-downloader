@@ -60,6 +60,9 @@ const WORKERS_DEV_ALLOWED_PATHS = new Set([
   WEBHOOK_PATH,
   '/api/health',
   '/api/download',
+  '/api/video',
+  '/api/audio',
+  '/api/image',
 ])
 const CANONICAL_ORIGIN = 'https://www.socialdownloader.space'
 
